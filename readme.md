@@ -1,21 +1,24 @@
-### Simple RPC
+# SimpleRPCRU
 
-A simple to use and configure Discord RPC mod for Minecraft.
+Русифицированный форк **SimpleRPC** с улучшенным Discord Rich Presence для Minecraft.
 
-The source code found here is for the v4+ releases, which are now open source.
+## Features
+- 🇷🇺 Полная русификация Discord Rich Presence
+- 🧠 Более информативные статусы (мир, биом, сервер, день/ночь, онлайн)
+- 🎮 Поддержка одиночной игры и серверов
+- ⚙️ Автоматическое создание конфига
+- 🖥️ Клиентский мод (не требуется на сервере)
 
-You can find [development](https://nightbloom.cc/project/simplerpc/) builds of this repo on our NightBloom platform.
+## Supported loaders
+- Fabric
+- Quilt
+- Forge
+- NeoForge
 
----
+## Credits
+- **Original mod:** SimpleRPC by HyperionMC
+- **Fork & localization:** nekostul (SimpleRPCRU)
+- Uses: Unimined, CraterLib
 
-#### Credits
-
-Powered by:
-- [Unimined](https://github.com/unimined/unimined)
-- [CraterLib](https://github.com/firstdarkdev/CraterLib)
-
----
-
-#### License
-
-This repository and code is licensed under the MIT license. Please note that older releases are still subject to the ARR license!
+## License
+MIT License (same as original SimpleRPC v4+)
