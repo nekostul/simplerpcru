@@ -1,0 +1,52 @@
+package com.hypherionmc.simplerpc.config.impl;
+
+import com.hypherionmc.simplerpc.config.base.BaseRPCConfig;
+import com.hypherionmc.simplerpc.config.objects.ServerEntry;
+import com.hypherionmc.simplerpc.discord.simplerpcCore;
+import shadow.hypherionmc.moonconfig.core.conversion.Path;
+import shadow.hypherionmc.moonconfig.core.conversion.SpecComment;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * @author HypherionSA
+ *
+ * Main Config allowing users to override the Multiplayer RPC based on the server they
+ * are connected to
+ */
+public final class ServerEntriesConfig extends BaseRPCConfig<ServerEntriesConfig> {
+
+    private transient final simplerpcCore core;
+
+    @Path("enabled")
+    @SpecComment("Enable/Disable Server Entries overrides")
+    public boolean enabled = false;
+
+    @Path("version")
+    @SpecComment("Internal Version Number. NO TOUCHY!")
+    public static int version = 3;
+
+    @Path("entry")
+    @SpecComment("Server override entries")
+    public List<ServerEntry> serverEntries = new ArrayList<>();
+
+    public ServerEntriesConfig(simplerpcCore core) {
+        super("server-entries", core.getLangCode());
+        this.core = core;
+
+        try {
+            registerAndSetup(this);
+        } catch (Exception ignored) {}
+    }
+
+    @Override
+    public void configReloaded() {
+        core.setServerEntriesConfig(this.readConfig(this));
+    }
+
+    @Override
+    public int getConfigVersion() {
+        return version;
+    }
+}

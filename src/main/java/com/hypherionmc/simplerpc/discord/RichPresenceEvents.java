@@ -1,0 +1,181 @@
+package com.hypherionmc.simplerpc.discord;
+
+import com.hypherionmc.simplerpc.api.rpc.RichPresenceBuilder;
+import com.hypherionmc.simplerpc.api.rpc.RichPresenceContainer;
+import com.hypherionmc.simplerpc.api.utils.APIUtils;
+import com.hypherionmc.simplerpc.api.variables.PlaceholderEngine;
+import com.hypherionmc.simplerpc.config.impl.ClientConfig;
+import com.hypherionmc.simplerpc.config.impl.ReplayModConfig;
+import com.hypherionmc.simplerpc.config.impl.ServerEntriesConfig;
+import com.hypherionmc.simplerpc.config.objects.DimensionSection;
+import com.hypherionmc.simplerpc.config.objects.ServerEntry;
+import com.hypherionmc.simplerpc.enums.GameType;
+import com.hypherionmc.simplerpc.enums.RichPresenceState;
+import dev.firstdark.rpc.models.DiscordRichPresence;
+import lombok.Getter;
+import org.jetbrains.annotations.ApiStatus;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.Optional;
+
+/**
+ * @author HypherionSA
+ *
+ * Main Events Controller. This takes care of setting the correct RPC at the correct time
+ */
+public final class RichPresenceEvents {
+
+    // Internal Values
+    private final simplerpcCore core;
+    private RichPresenceState rpcState = RichPresenceState.INIT;
+
+    @Getter
+    private GameType gameType = GameType.SINGLE;
+
+    @Nullable
+    private DiscordRichPresence customPresence = null;
+
+    /**
+     * Create a new instance of the RPC Event Handler
+     *
+     * @param core A Copy of {@link simplerpcCore}
+     */
+    @ApiStatus.Internal
+    RichPresenceEvents(simplerpcCore core) {
+        this.core = core;
+        setRPCState(RichPresenceState.INIT);
+    }
+
+    /**
+     * Update the current state of the RPC
+     *
+     * @param state What {@link dev.firstdark.rpc.enums.RPCState} should be shown
+     */
+    public void setRPCState(RichPresenceState state) {
+        rpcState = state;
+        updateRPC();
+    }
+
+    /**
+     * Update the current RPC state, with additional game type
+     *
+     * @param state What {@link dev.firstdark.rpc.enums.RPCState} should be shown
+     * @param type What kind of {@link GameType} is the player in
+     */
+    public void setRPCState(RichPresenceState state, GameType type) {
+        this.gameType = type;
+        setRPCState(state);
+    }
+
+    /**
+     * Set your own RPC state, overriding any displayed RPC
+     *
+     * @param newPresence A fully constructed {@link RichPresenceBuilder} instance
+     */
+    public void setCustomRPC(@Nullable RichPresenceBuilder newPresence) {
+        this.rpcState = RichPresenceState.CUSTOM;
+        this.customPresence = newPresence != null ? newPresence.getPresence() : null;
+    }
+
+    /**
+     * RPC Update "tick loop"
+     */
+    @ApiStatus.Internal
+    void updateRPC() {
+        ClientConfig clientConfig = core.getClientConfig();
+        simplerpcCore.DiscordController discordHandler = core.getDiscordController();
+        ReplayModConfig replayModConfig = simplerpcCore.replayModConfig;
+
+        if (clientConfig == null || !clientConfig.general.enabled || discordHandler == null)
+            return;
+
+        if (rpcState == RichPresenceState.CUSTOM && customPresence != null) {
+            discordHandler.updateRichPresence(customPresence);
+            return;
+        }
+
+        // Replay Mod Compat
+        if (rpcState == RichPresenceState.REPLAY_BROWSER || rpcState == RichPresenceState.REPLAY_EDITOR || rpcState == RichPresenceState.REPLAY_RENDER) {
+            if (replayModConfig != null && replayModConfig.enabled) {
+                switch (rpcState) {
+                    case REPLAY_BROWSER -> discordHandler.updateRichPresence(replayModConfig.replayModMenuSection.buildPresence().getPresence());
+                    case REPLAY_EDITOR -> discordHandler.updateRichPresence(replayModConfig.replayModEditorSection.buildPresence().getPresence());
+                    case REPLAY_RENDER -> discordHandler.updateRichPresence(replayModConfig.replayModRenderSection.buildPresence().getPresence());
+                }
+                return;
+            }
+        }
+
+        // Standard RPC values
+        switch (rpcState) {
+            case INIT -> discordHandler.updateRichPresence(clientConfig.init.buildPresence().getPresence());
+            case MAIN_MENU -> discordHandler.updateRichPresence(clientConfig.main_menu.buildPresence().getPresence());
+            case REALM_MENU -> discordHandler.updateRichPresence(clientConfig.realmsScreenSection.buildPresence().getPresence());
+            case SERVER_MENU -> discordHandler.updateRichPresence(clientConfig.server_list.buildPresence().getPresence());
+            case JOINING_GAME -> discordHandler.updateRichPresence(clientConfig.join_game.buildPresence().getPresence());
+            case PAUSED -> discordHandler.updateRichPresence(clientConfig.pauseSection.buildPresence().getPresence());
+            case IN_GAME -> {
+                switch (gameType) {
+                    case SINGLE -> updateSinglePlayerRpc(clientConfig, discordHandler);
+                    case MULTIPLAYER -> updateMultiplayerRpc(clientConfig, discordHandler);
+                    case REALM -> discordHandler.updateRichPresence(clientConfig.realmsGameSection.buildPresence().getPresence());
+                }
+            }
+        }
+    }
+
+    /**
+     * Build the Single Player RPC
+     * This RPC is overridden by the Biome/Dimension entries
+     *
+     * @param config The currently loaded {@link ClientConfig}
+     * @param discordHandler A copy of the {@link com.hypherionmc.simplerpc.discord.simplerpcCore.DiscordController}
+     */
+    private void updateSinglePlayerRpc(ClientConfig config, simplerpcCore.DiscordController discordHandler) {
+        RichPresenceContainer main = config.single_player;
+
+        // Override with Dimensions/Biomes
+        if (config.dimension_overrides.enabled && !config.dimension_overrides.dimensions.isEmpty()) {
+            Optional<DimensionSection.Dimension> dimension = APIUtils.findDimension(config.dimension_overrides.dimensions);
+
+            if (dimension.isPresent()) {
+                main = main.overrideWith(dimension.get());
+            }
+        }
+
+        discordHandler.updateRichPresence(main.buildPresence().getPresence());
+    }
+
+    /**
+     * Build the Multi Player RPC
+     * This RPC is overridden by the Biome/Dimension entries as well as the Server Entries overrides
+     *
+     * @param config The currently loaded {@link ClientConfig}
+     * @param discordHandler A copy of the {@link com.hypherionmc.simplerpc.discord.simplerpcCore.DiscordController}
+     */
+    private void updateMultiplayerRpc(ClientConfig config, simplerpcCore.DiscordController discordHandler) {
+        RichPresenceContainer main = config.multi_player;
+
+        // Override with Dimensions/Biomes
+        if (config.dimension_overrides.enabled && !config.dimension_overrides.dimensions.isEmpty()) {
+            Optional<DimensionSection.Dimension> dimension = APIUtils.findDimension(config.dimension_overrides.dimensions);
+
+            if (dimension.isPresent()) {
+                main = main.overrideWith(dimension.get());
+            }
+        }
+
+        // Override with server entries config
+        ServerEntriesConfig entriesConfig = core.getServerEntriesConfig();
+        if (entriesConfig != null && entriesConfig.enabled && !entriesConfig.serverEntries.isEmpty()) {
+            String ip = PlaceholderEngine.INSTANCE.resolvePlaceholders("{{server.ip}}");
+            Optional<ServerEntry> entry = entriesConfig.serverEntries.stream().filter(e -> e.ip.equalsIgnoreCase(ip)).findFirst();
+
+            if (entry.isPresent()) {
+                main = main.overrideWith(entry.get());
+            }
+        }
+
+        discordHandler.updateRichPresence(main.buildPresence().getPresence());
+    }
+}

@@ -1,0 +1,65 @@
+def projectName = "Simple Discord RPC";
+def projectIcon = "https://cdn.modrinth.com/data/ObXSoyrn/bdcee1893ca0f5fc03c7faec6135f39faaed8705.png";
+def JDK = "17";
+def modLoaders = "neoforge|fabric|quilt|forge";
+def supportedMc = "1.18.2|1.19.2|1.19.3|1.19.4|1.20|1.20.1|1.20.2|1.20.3|1.20.4|1.21|1.21.1|1.21.3|1.21.4|1.21.5|1.21.6|1.21.7";
+def reltype = "snapshot";
+
+pipeline {
+    agent {
+        docker {
+            image "registry.firstdark.dev/java${JDK}:latest"
+            alwaysPull true
+            args '-v gradle-cache:/home/gradle/.gradle'
+       }
+   }
+
+   environment {
+       GRADLE_USER_HOME = '/home/gradle/.gradle'
+   }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                scmSkip(deleteBuild: false, skipPattern:'.*\\[ci skip\\].*')
+            }
+        }
+
+        stage("Notify Discord") {
+            steps {
+                discordSend webhookURL: env.SSS_WEBHOOK,
+                        title: "Deploy Started: ${projectName} Universal Deploy #${BUILD_NUMBER}",
+                        link: env.BUILD_URL,
+                        result: 'SUCCESS',
+                        description: "Build: [${BUILD_NUMBER}](${env.BUILD_URL})"
+            }
+        }
+
+        stage("Build") {
+            steps {
+                sh "chmod +x ./gradlew"
+                sh "./gradlew clean build publish -PreleaseType=${reltype}"
+            }
+        }
+    }
+
+    post {
+        always {
+            sh "./gradlew --stop"
+            archiveArtifacts artifacts: 'build/libs/*.jar'
+
+            fddsnapshotter apiKey: env.PLATFORM_KEY,
+                projectSlug: "simplerpcru",
+                projectName: "${projectName}",
+                projectIcon: "${projectIcon}",
+                modLoaders: "${modLoaders}",
+                minecraftVersions: "${supportedMc}",
+                type: "${reltype}",
+                dependsOn: "required:craterlib",
+                failWebhook: env.SSS_WEBHOOK,
+                publishWebhooks: "${env.SSS_WEBHOOK}|${env.FDD_WH}"
+
+            deleteDir()
+        }
+    }
+}

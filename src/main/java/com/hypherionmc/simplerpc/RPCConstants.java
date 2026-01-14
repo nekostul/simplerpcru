@@ -1,0 +1,13 @@
+package com.hypherionmc.simplerpc;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+/**
+ * @author HypherionSA
+ */
+public final class RPCConstants {
+    public static final String MOD_ID = "simplerpcru";
+    public static final String MOD_NAME = "Simple RPC (RU)";
+    public static final Logger logger = LogManager.getLogger(MOD_NAME);
+}
